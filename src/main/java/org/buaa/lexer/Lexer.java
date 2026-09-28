@@ -505,7 +505,7 @@ public class Lexer {
                 advance();
 
                 addToken(
-                        TokenType.LPARNET,
+                        TokenType.LPARENT,
                         startIndex,
                         startLine,
                         startColumn
@@ -520,7 +520,7 @@ public class Lexer {
                 advance();
 
                 addToken(
-                        TokenType.RPARNET,
+                        TokenType.RPARENT,
                         startIndex,
                         startLine,
                         startColumn

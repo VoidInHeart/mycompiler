@@ -45,8 +45,8 @@ public enum TokenType {
     DIV,        // /
     ASSIGN,     // =
 
-    LPARNET,    // (
-    RPARNET,    // )
+    LPARENT,    // (
+    RPARENT,    // )
     LBRACK,     // [
     RBRACK,     // ]
     LBRACE,     // {

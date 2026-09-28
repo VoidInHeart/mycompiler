@@ -5,16 +5,17 @@ plugins {
 group = "org.buaa"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
-dependencies {
-    testImplementation(platform("org.junit:junit-bom:6.0.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+tasks.compileJava {
+    source("Compiler.java")
 }
 
-tasks.test {
-    useJUnitPlatform()
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.release.set(17)
 }
