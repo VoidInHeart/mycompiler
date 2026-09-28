@@ -344,7 +344,7 @@ Case语句 CaseStmt → 'case' Number ':' { Stmt } | 'default' ':' { Stmt } // e
 
 | 类别码 | 错误 | 与文法相关的说明 |
 |---|---|---|
-| a | 非法符号 | 出现 `&` 和 `|` 时，应将其当做 `&&` 与 `||` 进行处理，但是记录单词名称时仍记录 `&` 和 `|`。对应 LAndExp / LOrExp。 |
+| a | 非法符号 | 出现 `&` 和 `\|` 时，应将其当做 `&&` 与 `||` 进行处理，但是记录单词名称时仍记录 `&` 和 `|`。对应 LAndExp / LOrExp。 |
 | b | 名字重定义 | 函数名或者变量名在当前作用域下重复定义。对应 ConstDef、VarDef、FuncDef、FuncFParam 中的 Ident。 |
 | c | 未定义的名字 | 使用了未定义的标识符。对应 LVal、UnaryExp 中的 Ident。 |
 | d | 函数参数个数不匹配 | 函数调用语句中，参数个数与函数定义中的参数个数不匹配。对应 `UnaryExp → Ident '(' [FuncRParams] ')'`。 |

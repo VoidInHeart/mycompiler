@@ -55,4 +55,6 @@ public enum TokenType {
     COMMA,      // ,
     COLON,      // :
     SEMICN,     // ;
+
+    EOF         // end of file
 }

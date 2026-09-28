@@ -1,17 +1,105 @@
 package org.buaa;
 
-//TIP 要<b>运行</b>代码，请按 <shortcut actionId="Run"/> 或
-// 点击装订区域中的 <icon src="AllIcons.Actions.Execute"/> 图标。
-public class Main {
-    public static void main(String[] args) {
-        //TIP 当文本光标位于高亮显示的文本处时按 <shortcut actionId="ShowIntentionActions"/>
-        // 查看 IntelliJ IDEA 建议如何修正。
-        System.out.printf("Hello and welcome!");
+import org.buaa.diagnostic.DiagnosticEngine;
+import org.buaa.lexer.Lexer;
+import org.buaa.lexer.Token;
+import org.buaa.lexer.TokenType;
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP 按 <shortcut actionId="Debug"/> 开始调试代码。我们已经设置了一个 <icon src="AllIcons.Debugger.Db_set_breakpoint"/> 断点
-            // 但您始终可以通过按 <shortcut actionId="ToggleLineBreakpoint"/> 添加更多断点。
-            System.out.println("i = " + i);
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+public class Main {
+
+    private static final Path INPUT_FILE =
+            Path.of("testfile.txt");
+
+    private static final Path LEXER_OUTPUT =
+            Path.of("lexer.txt");
+
+    private static final Path ERROR_OUTPUT =
+            Path.of("error.txt");
+
+    public static void main(String[] args) {
+
+        try {
+            String source =
+                    Files.readString(INPUT_FILE);
+
+            DiagnosticEngine diagnostics =
+                    new DiagnosticEngine();
+
+            Lexer lexer =
+                    new Lexer(source, diagnostics);
+
+            List<Token> tokens =
+                    lexer.tokenize();
+
+            /*
+             * 如果存在词法错误：
+             *
+             * 只输出 error.txt
+             */
+            if (diagnostics.hasErrors()) {
+
+                diagnostics.writeTo(ERROR_OUTPUT);
+
+                /*
+                 * 防止上一次运行遗留 lexer.txt。
+                 */
+                Files.deleteIfExists(LEXER_OUTPUT);
+
+            } else {
+
+                /*
+                 * 正确程序：
+                 *
+                 * 只输出 lexer.txt
+                 */
+                writeLexerResult(tokens);
+
+                /*
+                 * 防止上一次运行遗留 error.txt。
+                 */
+                Files.deleteIfExists(ERROR_OUTPUT);
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "Failed to read or write file",
+                    e
+            );
         }
+    }
+
+    private static void writeLexerResult(
+            List<Token> tokens
+    ) throws IOException {
+
+        StringBuilder output =
+                new StringBuilder();
+
+        for (Token token : tokens) {
+
+            /*
+             * EOF 只是编译器内部 Token，
+             * 不属于题目要求的词法分析输出。
+             */
+            if (token.type() == TokenType.EOF) {
+                continue;
+            }
+
+            output
+                    .append(token.type())
+                    .append(' ')
+                    .append(token.text())
+                    .append(System.lineSeparator());
+        }
+
+        Files.writeString(
+                LEXER_OUTPUT,
+                output.toString()
+        );
     }
 }
