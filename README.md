@@ -24,8 +24,38 @@ $javaSources = @(Get-ChildItem src/main/java -Recurse -Filter '*.java' | ForEach
 & 'D:/tool/java17/bin/java.exe' -cp build/judge Compiler
 ```
 
-无词法错误时输出 `lexer.txt`；有词法错误时输出 `error.txt`。
+无词法/语法错误时输出 `parser.txt`；有词法/语法错误时输出 `error.txt`。
 输出文件位于运行命令的当前目录。
+
+## 语法分析与 AST
+
+`Parser` 使用 Java 递归调用栈实现递归下降分析，覆盖 `grammar.md` 中的完整文法。
+表达式按优先级分层，左递归部分用循环消除，AST 中保留左结合关系。
+`parser.txt` 按源码顺序输出 `类别码 原文`，在每次文法归约后输出 `<非终结符>`；
+按课程输出约定省略 `<Decl>`、`<BType>`、`<BlockItem>`，不输出 EOF。
+例如 `1 + 2 + 3` 会在每次加法归约时输出 `<AddExp>`，而非只在表达式末尾输出一次。
+
+词法和语法阶段共享 `DiagnosticEngine`：即使词法已报错也继续语法分析。
+缺少 `;`、`)`、`]` 分别记录 i/j/k，行号取缺失位置之前最后一个实际 token 的行号，
+按插入标点恢复，不消耗后续 token；错误按行号升序写入 `error.txt`。
+运行时清理另一种结果文件及旧的 `lexer.txt`，避免重复运行留下过期结果。
+
+`new Parser(tokens, diagnostics).parse()` 返回 `Ast.CompUnit`。
+AST 区分声明、函数、语句、初值、表达式，包含原始 token 和从 1 开始、左闭右开的源码范围；
+列表不可变，可选子节点为 `null`。正常分析及上述错误恢复均会生成完整 AST，供后续语义分析使用。
+本阶段不检查 b–h、l–n 等语义错误。文法保证之外的结构性错误（如缺少左花括号）会抛出
+带源码位置的异常，不编造未规定的错误类别。
+
+回归测试仅依赖 JDK 17：
+
+```powershell
+$javaSources = @(Get-ChildItem src/main/java,src/test/java -Recurse -Filter '*.java' | ForEach-Object { $_.FullName })
+& 'D:/tool/java17/bin/javac.exe' --release 17 -encoding UTF-8 -d build/parser-tests Compiler.java @javaSources
+$testClasspath = (Resolve-Path build/parser-tests).Path
+& 'D:/tool/java17/bin/java.exe' -cp $testClasspath org.buaa.parser.ParserTest
+```
+
+也可执行 `./gradlew.bat parserTest`；`check` 会包含这组测试。
 
 ## 提交目录
 
@@ -41,8 +71,10 @@ $javaSources = @(Get-ChildItem src/main/java -Recurse -Filter '*.java' | ForEach
 └── org/
     └── buaa/
         ├── Main.java
+        ├── ast/
         ├── diagnostic/
         ├── lexer/
+        ├── parser/
         └── source/
 ```
 

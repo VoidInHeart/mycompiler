@@ -3,7 +3,7 @@ package org.buaa;
 import org.buaa.diagnostic.DiagnosticEngine;
 import org.buaa.lexer.Lexer;
 import org.buaa.lexer.Token;
-import org.buaa.lexer.TokenType;
+import org.buaa.parser.Parser;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,6 +17,9 @@ public class Main {
 
     private static final Path LEXER_OUTPUT =
             Path.of("lexer.txt");
+
+    private static final Path PARSER_OUTPUT =
+            Path.of("parser.txt");
 
     private static final Path ERROR_OUTPUT =
             Path.of("error.txt");
@@ -36,28 +39,30 @@ public class Main {
             List<Token> tokens =
                     lexer.tokenize();
 
-            /*
-             * 如果存在词法错误：
-             *
-             * 只输出 error.txt
-             */
+            // 词法报错不能提前终止；完整 AST 留给后续语义分析继续使用。
+            Parser parser = new Parser(tokens, diagnostics);
+            parser.parse();
+
+            // 当前阶段输出 parser.txt，清理上一阶段的词法输出。
+            Files.deleteIfExists(LEXER_OUTPUT);
+
             if (diagnostics.hasErrors()) {
 
                 diagnostics.writeTo(ERROR_OUTPUT);
 
                 /*
-                 * 防止上一次运行遗留 lexer.txt。
+                 * 防止上一次运行遗留 parser.txt。
                  */
-                Files.deleteIfExists(LEXER_OUTPUT);
+                Files.deleteIfExists(PARSER_OUTPUT);
 
             } else {
 
                 /*
                  * 正确程序：
                  *
-                 * 只输出 lexer.txt
+                 * 只输出 parser.txt
                  */
-                writeLexerResult(tokens);
+                parser.writeTo(PARSER_OUTPUT);
 
                 /*
                  * 防止上一次运行遗留 error.txt。
@@ -73,33 +78,4 @@ public class Main {
         }
     }
 
-    private static void writeLexerResult(
-            List<Token> tokens
-    ) throws IOException {
-
-        StringBuilder output =
-                new StringBuilder();
-
-        for (Token token : tokens) {
-
-            /*
-             * EOF 只是编译器内部 Token，
-             * 不属于题目要求的词法分析输出。
-             */
-            if (token.type() == TokenType.EOF) {
-                continue;
-            }
-
-            output
-                    .append(token.type())
-                    .append(' ')
-                    .append(token.text())
-                    .append(System.lineSeparator());
-        }
-
-        Files.writeString(
-                LEXER_OUTPUT,
-                output.toString()
-        );
-    }
 }
