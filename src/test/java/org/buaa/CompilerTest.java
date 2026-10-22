@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 public final class CompilerTest {
     public static void main(String[] args) throws Exception {
         Path directory = Files.createTempDirectory("sysy-compiler-tests-");
+        officialSamples(directory);
         for (String name : List.of("symbol.txt", "error.txt", "parser.txt", "lexer.txt")) {
             Files.writeString(directory.resolve(name), "stale");
         }
@@ -61,7 +62,71 @@ public final class CompilerTest {
         runCompiler(directory);
         equal("", read(directory, "symbol.txt"), "main-only program produces an empty symbol file");
         absent(directory, "error.txt", "parser.txt", "lexer.txt", "llvm_ir.txt");
-        System.out.println("Passed 3 compiler file protocol tests.");
+        System.out.println("Passed 5 compiler file protocol tests (including both official samples).");
+    }
+
+    private static void officialSamples(Path directory) throws Exception {
+        // PDF 第 14 页及测评机的错误样例：第 5 行的两条语句必须保留在同一行。
+        Files.writeString(directory.resolve("testfile.txt"), """
+                const int const1 = 1, const2 = -100;
+                int change1;
+                int gets1(int var1,int var2){
+                    const1 = 999;
+                    change1 = var1 + var2          return (change1);
+                }
+                int main(){
+                    change1 = 10;
+                    printf("Hello World");
+                    return 0;
+                }
+                """);
+        runCompiler(directory);
+        equal("4 h\n5 i\n", read(directory, "error.txt"), "official error sample");
+        absent(directory, "symbol.txt", "parser.txt", "lexer.txt", "llvm_ir.txt");
+
+        // 测评机正确样例：库函数可调用但不输出，length 的作用域编号必须为 5。
+        Files.writeString(directory.resolve("testfile.txt"), """
+                const int year = 2026, month = 9;
+                int day;
+
+                int getDay(){
+                    static int day;
+                    day = get_int();
+                    return day;
+                }
+
+                int fun(){
+                    return 12345;
+                }
+
+                int main(){
+                    day = getDay();
+                    printf("Tody is %d-%d-%d\\n", year, month, day);
+
+                    {
+                        int length = fun();
+                        if(length > 4){
+                            printf("%d\\n", length);
+                        }
+                    }
+
+                    return 0;
+                }
+                """);
+        runCompiler(directory);
+        if (Files.exists(directory.resolve("error.txt"))) {
+            throw new AssertionError("Official valid sample rejected:\n" + read(directory, "error.txt"));
+        }
+        equal("""
+                1 year ConstInt
+                1 month ConstInt
+                1 day Int
+                1 getDay IntFunc
+                1 fun IntFunc
+                2 day StaticInt
+                5 length Int
+                """, read(directory, "symbol.txt"), "official valid symbol output");
+        absent(directory, "error.txt", "parser.txt", "lexer.txt", "llvm_ir.txt");
     }
 
     private static void runCompiler(Path directory) throws Exception {

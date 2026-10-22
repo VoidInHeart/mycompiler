@@ -18,6 +18,7 @@ public final class SemanticAnalyzerTest {
 
     public static void main(String[] args) throws Exception {
         work = Files.createTempDirectory("sysy-semantic-tests-");
+        runtimeFunctions();
         symbolOutput();
         bindingsAndScopes();
         storageAndConstants();
@@ -107,6 +108,74 @@ public final class SemanticAnalyzerTest {
         equal(8, result.semantic().scopes().size(), "empty scopes still consume an id");
         check(result.semantic().scopes().get(0).lookupLocal("main") == null, "main is not a symbol");
         equal(4, result.semantic().activationRecords().size(), "main still has an activation record");
+    }
+
+    private static void runtimeFunctions() throws Exception {
+        Result result = valid("""
+                int readInt(){return get_int();}
+                char readChar(){return get_char();}
+                void readText(char text[], int n){get_string(text,n); return;}
+                int main(){
+                    int n=get_int();
+                    char c=get_char(), text[8];
+                    get_string(text,8);
+                    put_int(n); put_char(c); put_str(text); put_string(text);
+                    put_int(get_int()); put_char(get_char());
+                    return 0;
+                }
+                """);
+        equal("""
+                1 readInt IntFunc
+                1 readChar CharFunc
+                1 readText VoidFunc
+                4 text CharArray
+                4 n Int
+                5 n Int
+                5 c Char
+                5 text CharArray
+                """, result.semantic().symbolOutput(), "runtime signatures do not appear in symbol output");
+        equal(5, result.semantic().scopes().size(), "runtime signatures do not consume scope ids");
+        equal(4, result.semantic().activationRecords().size(), "runtime functions do not allocate source frames");
+        equal(0, result.semantic().staticStorage().size(), "runtime functions do not allocate static objects");
+        Ast.CallExpr readInt = (Ast.CallExpr) ((Ast.ReturnStmt) result.ast().functions().get(0)
+                .body().items().get(0)).value();
+        Symbol bound = result.semantic().symbolOf(readInt);
+        check(bound != null && bound.isRuntimeFunction() && bound.isFunction() && bound.type() == ValueType.INT,
+                "runtime call retains a typed symbol binding");
+        check(result.semantic().storageOf(bound) == null, "runtime function has no object slot");
+        equal(ValueType.INT, result.semantic().expressionInfo(readInt).type(), "runtime result type");
+
+        String prefix = "int main(){\nint n=0, a[2]; char c='a', text[8];\n";
+        String[] countErrors = {
+                "get_int(1);", "get_char('a');", "get_string(text);", "get_string(text,8,1);",
+                "put_int();", "put_char();", "put_str();", "put_string(text,text);"
+        };
+        for (String statement : countErrors) {
+            invalid(prefix + statement + " // error d\nreturn 0;\n}\n");
+        }
+        String[] typeErrors = {
+                "n=get_char();", "c=get_int();", "get_string(a,8);", "get_string(c,8);",
+                "get_string(text,c);", "put_int(c);", "put_char(n);", "put_str(a);",
+                "put_string(c);", "n=put_int(n);", "get_int+1;"
+        };
+        for (String statement : typeErrors) {
+            invalid(prefix + statement + " // error e\nreturn 0;\n}\n");
+        }
+        invalid("""
+                int main(){
+                    int n=get_int();
+                    char c=get_char();
+                    n=unregistered(); // error c
+                    n=missing+get_int(); // error c
+                    put_char(n); // error e
+                    printf("%d", get_char()); // error e
+                    printf("%c", get_int()); // error e
+                    put_int(get_int(); // error j
+                    n=get_int() // error i
+                    if(n & 1); // error a
+                    return 0;
+                }
+                """);
     }
 
     private static void bindingsAndScopes() throws Exception {

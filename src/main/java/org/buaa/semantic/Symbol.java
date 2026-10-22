@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /** 每次成功声明对应唯一对象，绑定关系和存储位置均使用该对象身份。 */
 public final class Symbol {
-    public enum Kind { CONSTANT, VARIABLE, STATIC_VARIABLE, PARAMETER, FUNCTION }
+    public enum Kind { CONSTANT, VARIABLE, STATIC_VARIABLE, PARAMETER, FUNCTION, RUNTIME_FUNCTION }
 
     private final int scopeId;
     private final Token token;
@@ -36,7 +36,8 @@ public final class Symbol {
     public List<ValueType> parameterTypes() { return parameterTypes; }
     public Integer arrayLength() { return arrayLength; }
     public InitialValue initialValue() { return initialValue; }
-    public boolean isFunction() { return kind == Kind.FUNCTION; }
+    public boolean isFunction() { return kind == Kind.FUNCTION || kind == Kind.RUNTIME_FUNCTION; }
+    public boolean isRuntimeFunction() { return kind == Kind.RUNTIME_FUNCTION; }
     public boolean isConstant() { return kind == Kind.CONSTANT; }
 
     void setInitialValue(InitialValue value) {

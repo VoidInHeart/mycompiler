@@ -4,11 +4,13 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 
 /** 活跃作用域使用栈查找；历史作用域独立保存，编号从 1 开始且不复用。 */
 public final class SymbolTable {
     private final Deque<Scope> active = new ArrayDeque<>();
     private final List<Scope> scopes = new ArrayList<>();
+    private final Map<String, Symbol> runtimeFunctions = RuntimeLibrary.functions();
 
     public SymbolTable() {
         enterScope();
@@ -45,6 +47,6 @@ public final class SymbolTable {
                 return symbol;
             }
         }
-        return null;
+        return runtimeFunctions.get(name);
     }
 }

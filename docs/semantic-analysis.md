@@ -35,6 +35,12 @@ testfile.txt → Lexer → tokens → Parser → AST → SemanticAnalyzer → Se
 函数名与对象名共用名字空间。`typeName()` 负责生成作业要求的名字，表达式检查则只使用
 `INT / CHAR / INT_ARRAY / CHAR_ARRAY / VOID`，const/static 不改变值类型。
 
+`RuntimeLibrary` 单独保存运行时函数签名。`SymbolTable.lookup()` 查找完活跃的用户作用域后，
+再查询此签名表。因此这些函数无需源码声明即可调用，但不会出现在 `scopes()` 和 `symbol.txt` 中。
+运行时符号种类为 `RUNTIME_FUNCTION`，可通过 `isRuntimeFunction()` 与用户函数区分；
+它们保留返回类型、形参类型及调用点绑定，不创建函数体作用域、活动记录或对象存储。
+`put_str` 与 `put_string` 均接受一个 char[] 参数并返回 void，兼容文档和配套库的命名差异。
+
 ## 3. 活动记录与存储
 
 每个函数（含 main）拥有一个 `ActivationRecord` 描述。分析函数时将其压入活动记录栈，
@@ -127,8 +133,10 @@ printf 数量不匹配时报告 l，否则逐个匹配 `%d`→int、`%c`→char�
 
 - `ParserTest`：38 项原有语法/AST/恢复回归，并更新评测入口的输出预期。
 - `SemanticModelTest`：作用域遮蔽与恢复、编号不复用、帧内数组布局、静态对象隔离、紧凑初值。
-- `SemanticAnalyzerTest`：60 项语义样例，覆盖 15 种输出类型、所有错误类别、错误恢复、绑定和存储元数据。
-- `CompilerTest`：3 次真实启动 Compiler 的文件协议测试，验证正确→错误→正确切换、旧文件清理和无 IR 输出。
+- `SemanticAnalyzerTest`：81 项语义样例，覆盖 15 种输出类型、所有错误类别、错误恢复、绑定、存储元数据和运行时函数签名。
+- `CompilerTest`：5 次真实启动 Compiler 的文件协议测试，包含两组官方输入输出，验证连续切换、旧文件清理和无 IR 输出。
 
 语义样例包含同一文件内全部 a–n 错误、重定义函数内部错误、10000 个运算符的表达式、
 十亿长度数组的紧凑元数据、char 回绕、字符串截断/补零及嵌套循环/switch。
+
+原始 PDF 的逐项复核、已修复遗漏和尚有歧义的规则见 [semantic-audit.md](semantic-audit.md)。

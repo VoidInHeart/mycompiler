@@ -40,6 +40,12 @@ $javaSources = @(Get-ChildItem src/main/java -Recurse -Filter '*.java' | ForEach
 按作用域编号升序输出，同一作用域按声明顺序输出，使用作业规定的 15 种类型名称。
 `main` 是关键字，不进入符号表；main 的函数体仍建立作用域和活动记录。
 
+运行时函数 `get_int/get_char/get_string/put_int/put_char/put_str` 可直接调用，
+并兼容配套库的 `put_string` 名称。`RuntimeLibrary` 提供独立签名表，
+与普通函数一样检查实参数量、类型及返回类型，但不输出库符号，不消耗作用域编号或活动记录。
+这些约定见 [grammar.md](grammar.md) 第 0 节；原始 PDF 复核结果见
+[docs/semantic-audit.md](docs/semantic-audit.md)。
+
 语义阶段检查 b–h、l–n，和词法 a、语法 i/j/k 共用 `DiagnosticEngine`。
 名字重定义的函数体也会继续分析；三阶段错误汇总后按行号升序输出。
 错误程序不输出符号文件；每次运行清理旧的另一种结果以及 `lexer.txt`、`parser.txt`。
