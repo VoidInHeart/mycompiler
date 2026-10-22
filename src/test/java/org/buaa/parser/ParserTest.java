@@ -344,17 +344,18 @@ public final class ParserTest {
         Files.writeString(directory.resolve("testfile.txt"), "int main(){return 0;}");
         Files.writeString(directory.resolve("error.txt"), "stale");
         Files.writeString(directory.resolve("lexer.txt"), "stale");
+        Files.writeString(directory.resolve("parser.txt"), "stale");
         runCompiler(directory);
-        equal(valid("int main(){return 0;}").parser().output(),
-                Files.readString(directory.resolve("parser.txt")), "entry point parser output");
+        equal("", Files.readString(directory.resolve("symbol.txt")), "main does not appear in symbols");
         check(!Files.exists(directory.resolve("error.txt")), "clear stale errors");
         check(!Files.exists(directory.resolve("lexer.txt")), "clear legacy lexer output");
+        check(!Files.exists(directory.resolve("parser.txt")), "clear legacy parser output");
         Files.writeString(directory.resolve("testfile.txt"),
                 "int main(){\nint x=1\nif(x & 1)x=2;\nreturn 0;}");
         runCompiler(directory);
         equal("2 i\n3 a\n", normalize(Files.readString(directory.resolve("error.txt"))),
                 "entry point runs parser even after lexical errors");
-        check(!Files.exists(directory.resolve("parser.txt")), "clear stale parser output");
+        check(!Files.exists(directory.resolve("symbol.txt")), "clear stale symbol output");
         Files.writeString(directory.resolve("testfile.txt"), "int main(){return 0;}");
         runCompiler(directory);
         check(!Files.exists(directory.resolve("error.txt")), "clear error file after correction");

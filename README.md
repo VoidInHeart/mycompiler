@@ -24,38 +24,77 @@ $javaSources = @(Get-ChildItem src/main/java -Recurse -Filter '*.java' | ForEach
 & 'D:/tool/java17/bin/java.exe' -cp build/judge Compiler
 ```
 
-无词法/语法错误时输出 `parser.txt`；有词法/语法错误时输出 `error.txt`。
-输出文件位于运行命令的当前目录。
+编译器依次运行词法、语法、语义分析；正确程序输出 `symbol.txt`，
+有任何阶段的错误则仅输出 `error.txt`。输出文件位于运行命令的当前目录。
+本阶段不生成 LLVM IR，也不执行源程序。
+
+## 语义分析、符号表与活动记录
+
+`SemanticAnalyzer` 按源码顺序遍历 AST，使用栈式符号表解析标识符。
+全局作用域编号为 1，每进入一个新作用域就递增，退出后不复用编号；
+函数形参与函数体最外层局部声明共用作用域，嵌套 Block 创建新作用域。
+空 Block 也消耗编号；switch 本身不是文法中的 Block，其 case 内显式 Block 才创建作用域。
+函数先声明再检查函数体，支持直接递归；后面才声明的名字不可见。
+
+`symbol.txt` 每行格式为 `作用域序号 名字 类型名称`，字段间一个空格。
+按作用域编号升序输出，同一作用域按声明顺序输出，使用作业规定的 15 种类型名称。
+`main` 是关键字，不进入符号表；main 的函数体仍建立作用域和活动记录。
+
+语义阶段检查 b–h、l–n，和词法 a、语法 i/j/k 共用 `DiagnosticEngine`。
+名字重定义的函数体也会继续分析；三阶段错误汇总后按行号升序输出。
+错误程序不输出符号文件；每次运行清理旧的另一种结果以及 `lexer.txt`、`parser.txt`。
+
+活动记录使用目标机无关的逻辑槽位描述，包含调用者链接、返回地址、可选返回值、
+形参和各层 Block 的自动局部对象。数组形参占一个地址槽，局部数组占其长度对应的槽数。
+全局和静态局部对象保存在独立的静态存储表，不随函数活动记录退出而释放。
+这里保存的是布局描述，并未指定机器字节偏移、调用 ABI 或实际运行时调用栈。
+
+`new SemanticAnalyzer(diagnostics).analyze(ast)` 返回 `SemanticResult`，可以查询：
+
+- `scopes()`：所有历史作用域及其中的符号。
+- `symbolOf(node)`：声明、形参、函数、LVal 和函数调用绑定的符号。
+- `expressionInfo(expr)`：表达式类型及可选编译期常量值。
+- `activationRecords()` / `staticStorage()` / `storageOf(symbol)`：函数布局和对象存储位置。
+
+常量折叠支持字符转义、显式转换、char 模 256 回绕和常量数组元素读取；
+初值保留字符串截断、部分初始化补零、全局/静态对象默认零初始化的信息。
+普通未初始化局部变量和运行时表达式的值保持未知。
+详细设计及错误定位规则见 [docs/semantic-analysis.md](docs/semantic-analysis.md)。
 
 ## 语法分析与 AST
 
 `Parser` 使用 Java 递归调用栈实现递归下降分析，覆盖 `grammar.md` 中的完整文法。
 表达式按优先级分层，左递归部分用循环消除，AST 中保留左结合关系。
-`parser.txt` 按源码顺序输出 `类别码 原文`，在每次文法归约后输出 `<非终结符>`；
+`Parser.output()` / `Parser.writeTo(path)` 仍可输出语法分析结果，用于单独调试语法阶段，
+评测入口现在不输出 `parser.txt`。语法结果按源码顺序输出 `类别码 原文`，在每次文法归约后输出 `<非终结符>`；
 按课程输出约定省略 `<Decl>`、`<BType>`、`<BlockItem>`，不输出 EOF。
 例如 `1 + 2 + 3` 会在每次加法归约时输出 `<AddExp>`，而非只在表达式末尾输出一次。
 
 词法和语法阶段共享 `DiagnosticEngine`：即使词法已报错也继续语法分析。
 缺少 `;`、`)`、`]` 分别记录 i/j/k，行号取缺失位置之前最后一个实际 token 的行号，
 按插入标点恢复，不消耗后续 token；错误按行号升序写入 `error.txt`。
-运行时清理另一种结果文件及旧的 `lexer.txt`，避免重复运行留下过期结果。
 
 `new Parser(tokens, diagnostics).parse()` 返回 `Ast.CompUnit`。
 AST 区分声明、函数、语句、初值、表达式，包含原始 token 和从 1 开始、左闭右开的源码范围；
 列表不可变，可选子节点为 `null`。正常分析及上述错误恢复均会生成完整 AST，供后续语义分析使用。
-本阶段不检查 b–h、l–n 等语义错误。文法保证之外的结构性错误（如缺少左花括号）会抛出
+`Parser` 自身不检查语义错误，交由后续 `SemanticAnalyzer` 处理。
+文法保证之外的结构性错误（如缺少左花括号）会抛出
 带源码位置的异常，不编造未规定的错误类别。
 
 回归测试仅依赖 JDK 17：
 
 ```powershell
 $javaSources = @(Get-ChildItem src/main/java,src/test/java -Recurse -Filter '*.java' | ForEach-Object { $_.FullName })
-& 'D:/tool/java17/bin/javac.exe' --release 17 -encoding UTF-8 -d build/parser-tests Compiler.java @javaSources
-$testClasspath = (Resolve-Path build/parser-tests).Path
+& 'D:/tool/java17/bin/javac.exe' --release 17 -encoding UTF-8 -d build/semantic-tests Compiler.java @javaSources
+$testClasspath = (Resolve-Path build/semantic-tests).Path
 & 'D:/tool/java17/bin/java.exe' -cp $testClasspath org.buaa.parser.ParserTest
+& 'D:/tool/java17/bin/java.exe' -cp $testClasspath org.buaa.semantic.SemanticModelTest
+& 'D:/tool/java17/bin/java.exe' -cp $testClasspath org.buaa.semantic.SemanticAnalyzerTest
+& 'D:/tool/java17/bin/java.exe' -cp $testClasspath org.buaa.CompilerTest
 ```
 
-也可执行 `./gradlew.bat parserTest`；`check` 会包含这组测试。
+也可执行 `./gradlew.bat check`，会包含上述四组测试；可以通过
+`parserTest`、`semanticModelTest`、`semanticTest`、`compilerTest` 分别执行。
 
 ## 提交目录
 
@@ -75,6 +114,7 @@ $testClasspath = (Resolve-Path build/parser-tests).Path
         ├── diagnostic/
         ├── lexer/
         ├── parser/
+        ├── semantic/
         └── source/
 ```
 

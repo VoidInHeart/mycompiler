@@ -4,6 +4,8 @@ import org.buaa.diagnostic.DiagnosticEngine;
 import org.buaa.lexer.Lexer;
 import org.buaa.lexer.Token;
 import org.buaa.parser.Parser;
+import org.buaa.semantic.SemanticAnalyzer;
+import org.buaa.semantic.SemanticResult;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +22,9 @@ public class Main {
 
     private static final Path PARSER_OUTPUT =
             Path.of("parser.txt");
+
+    private static final Path SYMBOL_OUTPUT =
+            Path.of("symbol.txt");
 
     private static final Path ERROR_OUTPUT =
             Path.of("error.txt");
@@ -39,30 +44,23 @@ public class Main {
             List<Token> tokens =
                     lexer.tokenize();
 
-            // 词法报错不能提前终止；完整 AST 留给后续语义分析继续使用。
+            // 三个阶段共享诊断；即使已有词法/语法错误，也继续分析完整 AST。
             Parser parser = new Parser(tokens, diagnostics);
-            parser.parse();
+            SemanticResult semantic = new SemanticAnalyzer(diagnostics).analyze(parser.parse());
 
-            // 当前阶段输出 parser.txt，清理上一阶段的词法输出。
+            // 当前阶段输出符号或错误，清理先前阶段的输出。
             Files.deleteIfExists(LEXER_OUTPUT);
+            Files.deleteIfExists(PARSER_OUTPUT);
 
             if (diagnostics.hasErrors()) {
 
                 diagnostics.writeTo(ERROR_OUTPUT);
 
-                /*
-                 * 防止上一次运行遗留 parser.txt。
-                 */
-                Files.deleteIfExists(PARSER_OUTPUT);
+                Files.deleteIfExists(SYMBOL_OUTPUT);
 
             } else {
 
-                /*
-                 * 正确程序：
-                 *
-                 * 只输出 parser.txt
-                 */
-                parser.writeTo(PARSER_OUTPUT);
+                semantic.writeSymbolsTo(SYMBOL_OUTPUT);
 
                 /*
                  * 防止上一次运行遗留 error.txt。
