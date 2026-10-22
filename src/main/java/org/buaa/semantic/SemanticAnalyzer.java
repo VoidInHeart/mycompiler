@@ -402,7 +402,8 @@ public final class SemanticAnalyzer {
                     default -> throw new IllegalStateException("Unknown unary operator");
                 };
             }
-            return new ExpressionInfo(operand.type(), normalize(value, operand.type()));
+            ValueType resultType = unary.operator().type() == TokenType.NOT ? INT : operand.type();
+            return new ExpressionInfo(resultType, normalize(value, resultType));
         }
         if (expr instanceof Ast.BinaryExpr binary) {
             ExpressionInfo left = expressions.get(binary.left());
@@ -415,7 +416,12 @@ public final class SemanticAnalyzer {
                 return ExpressionInfo.ERROR;
             }
             Integer value = fold(binary.operator().type(), left.constantValue(), right.constantValue());
-            return new ExpressionInfo(left.type(), normalize(value, left.type()));
+            // 算术结果保留操作数类型；比较和逻辑结果统一为 int，值为 0 或 1。
+            ValueType resultType = switch (binary.operator().type()) {
+                case LSS, LEQ, GRE, GEQ, EQL, NEQ, AND, OR -> INT;
+                default -> left.type();
+            };
+            return new ExpressionInfo(resultType, normalize(value, resultType));
         }
         throw new IllegalStateException("Unknown expression: " + expr.getClass());
     }

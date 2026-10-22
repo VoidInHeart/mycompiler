@@ -22,6 +22,7 @@ public final class SemanticAnalyzerTest {
         symbolOutput();
         bindingsAndScopes();
         storageAndConstants();
+        comparisonAndLogicalResults();
         allErrorsTogether();
         typeErrors();
         namesAndCalls();
@@ -286,6 +287,65 @@ public final class SemanticAnalyzerTest {
                 }
                 """);
         equal(14L, errors(result).lines().count(), "all a-n errors in one program");
+    }
+
+    private static void comparisonAndLogicalResults() throws Exception {
+        String[] conditions = {
+                "'a' < 'b'", "'a' <= 'a'", "'b' > 'a'", "'b' >= 'b'",
+                "'a' == 'a'", "'a' != 'b'", "'a' && 'b'", "'\\0' || 'b'", "!'\\0'",
+                "'b' < 'a'", "'b' <= 'a'", "'a' > 'b'", "'a' >= 'b'",
+                "'a' == 'b'", "'a' != 'a'", "'a' && '\\0'", "'\\0' || '\\0'", "!'a'"
+        };
+        for (int i = 0; i < conditions.length; i++) {
+            Result result = valid("int main(){if(" + conditions[i] + ");return 0;}");
+            Ast.Expr condition = ((Ast.IfStmt) result.ast().mainFunction().body().items().get(0)).condition();
+            equal(ValueType.INT, result.semantic().expressionInfo(condition).type(),
+                    "comparison/logical result is int: " + conditions[i]);
+            equal(i < 9 ? 1 : 0, result.semantic().expressionInfo(condition).constantValue(),
+                    "comparison/logical constant is 0 or 1: " + conditions[i]);
+        }
+
+        // 原交付样例的失败条件：整数比较和字符比较结果应可组成同类型逻辑运算。
+        Result mixed = valid("""
+                int countText(char text[], int limit) {
+                    int i=0;
+                    while(i<limit && text[i]!='\\0' && text[i]!='\\n') {
+                        i=i+1;
+                    }
+                    return i;
+                }
+                int main(){
+                    int n=get_int(); char c=get_char(), text[8]="abc";
+                    if(n>0 && c!='\\0' || c=='a');
+                    if(!c && n || n && !c);
+                    if(c<'z'==1);
+                    if(!c==0);
+                    if(!+!c);
+                    countText(text,8);
+                    return 0;
+                }
+                """);
+        Ast.WhileStmt loop = (Ast.WhileStmt) mixed.ast().functions().get(0).body().items().get(1);
+        Ast.BinaryExpr and = (Ast.BinaryExpr) loop.condition();
+        equal(ValueType.INT, mixed.semantic().expressionInfo(and).type(), "compound condition type");
+        equal(ValueType.INT, mixed.semantic().expressionInfo(and.left()).type(), "left logical subtree type");
+        equal(ValueType.INT, mixed.semantic().expressionInfo(and.right()).type(), "right character comparison type");
+        check(mixed.semantic().expressionInfo(and).constantValue() == null, "runtime condition stays unknown");
+
+        // 结果类型修正不应吞掉比较操作数本身的类型错误或数组/void 错误。
+        invalid("""
+                void v(){return;}
+                int main(){
+                    int n=0, a[2]; char c='a';
+                    if(n<c); // error e
+                    if(c==n); // error e
+                    if(a==a); // error e
+                    if(v()==v()); // error e
+                    if(!a); // error e
+                    if(!v()); // error e
+                    return 0;
+                }
+                """);
     }
 
     private static void typeErrors() throws Exception {
